@@ -1,0 +1,4 @@
+# Placeholder grok patterns for the honeypot pipeline.
+# Currently unused (logs arrive pre-parsed as JSON), but reserved for
+# future plain-text log sources (e.g. host syslog).
+HONEYPOT_HTTP %{IP:src_ip}:%{INT:src_port} %{WORD:method} %{URIPATH:path}(?:\?%{DATA:query})?

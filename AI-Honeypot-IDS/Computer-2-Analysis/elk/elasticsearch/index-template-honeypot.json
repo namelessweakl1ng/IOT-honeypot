@@ -1,0 +1,48 @@
+{
+  "index_patterns": ["honeypot-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.refresh_interval": "5s",
+      "index.mapping.total_fields.limit": 2000
+    },
+    "mappings": {
+      "dynamic": false,
+      "properties": {
+        "@timestamp":    { "type": "date" },
+        "container_name":    { "type": "keyword" },
+        "container_service": { "type": "keyword" },
+        "device_model":      { "type": "keyword" },
+        "honeypot_host_ip":  { "type": "ip" },
+        "src_ip":            { "type": "ip" },
+        "src_port":          { "type": "integer" },
+        "dst_port":          { "type": "integer" },
+        "protocol":          { "type": "keyword" },
+        "method":            { "type": "keyword" },
+        "path":              { "type": "keyword" },
+        "query":             { "type": "text" },
+        "username":          { "type": "keyword" },
+        "password":          { "type": "keyword" },
+        "payload":           { "type": "text" },
+        "user_agent":        { "type": "keyword" },
+        "attack_type_hint":  { "type": "keyword" },
+        "response_code":     { "type": "integer" },
+        "auth_success":      { "type": "boolean" },
+        "host_header":       { "type": "keyword" },
+        "geo": {
+          "properties": {
+            "country_name": { "type": "keyword" },
+            "city_name":    { "type": "keyword" },
+            "region_name":  { "type": "keyword" },
+            "location":     { "type": "geo_point" }
+          }
+        },
+        "lab_id":     { "type": "keyword" },
+        "shipper":    { "type": "keyword" },
+        "source_host":{ "type": "keyword" }
+      }
+    }
+  },
+  "priority": 500
+}

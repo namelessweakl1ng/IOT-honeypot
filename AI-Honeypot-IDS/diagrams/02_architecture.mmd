@@ -1,0 +1,55 @@
+%% AI-Honeypot-IDS — High-level architecture (Mermaid)
+flowchart TB
+    subgraph Lab["Air-gapped lab 192.168.1.0/24"]
+        R["Router<br/>192.168.1.1<br/>(WAN unplugged)"]
+        C1["Computer 1 — Honeypot<br/>192.168.1.10<br/>Ubuntu + Docker"]
+        C2["Computer 2 — Analysis<br/>192.168.1.20<br/>Ubuntu + Docker + Python"]
+        C3["Computer 3 — Attacker<br/>192.168.1.30<br/>Kali Linux"]
+        R --- C1
+        R --- C2
+        R --- C3
+    end
+
+    subgraph Honeypot["Computer 1 — 11 containers"]
+        D1[Camera :8081]
+        D2[Microwave :8082]
+        D3[SmartTV :8083]
+        D4[SmartLight :8084]
+        D5[Router :8085]
+        D6[NAS :8086]
+        D7[Printer :8087+9100]
+        D8[SSH :2222]
+        D9[FTP :2121]
+        D10[HTTP :8080]
+        D11[Telnet :2323]
+        FB[Filebeat sidecar]
+    end
+
+    subgraph Analysis["Computer 2 — ELK + ML"]
+        LS[Logstash :5044]
+        ES[Elasticsearch :9200]
+        KB[Kibana :5601]
+        ML[ML pipeline<br/>ingest→features→train→evaluate]
+    end
+
+    subgraph Attacker["Computer 3 — Attack scripts"]
+        A1[01_portscan]
+        A2[02_bruteforce]
+        A3[03_webattacks]
+        A4[04_dirscan]
+        A5[05_nikto]
+        A6[06_sqlmap]
+        A7[07_netcat]
+        A8[08_dos_sim]
+        A9[09_custom_payloads]
+        A10[10_credential_post]
+    end
+
+    C3 --> A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 & A9 & A10
+    A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 & A9 & A10 -->|attacks| Honeypot
+    Honeypot -->|JSON stdout| FB
+    FB -->|TCP 5044| LS
+    LS --> ES
+    ES --> KB
+    ES -->|scroll| ML
+    ML -->|best_model.joblib| TM[(trained_models/)]

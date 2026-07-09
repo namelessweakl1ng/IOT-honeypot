@@ -1,0 +1,2 @@
+- pipeline.id: honeypot
+  path.config: "/etc/logstash/conf.d/*.conf"

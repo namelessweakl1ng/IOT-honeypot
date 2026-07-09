@@ -1,0 +1,128 @@
+# =============================================================================
+# Filebeat configuration — Computer 1 honeypot
+# =============================================================================
+# Ships every container log line (JSON) to Logstash on Computer 2.
+# Logstash then parses, enriches, and indexes into Elasticsearch.
+#
+# Layout:
+#   - filebeat.autodiscover: listens to Docker events, attaches processors for
+#     each honeypot container based on the "service" label.
+#   - One explicit container input per honeypot service for robustness.
+#   - output.logstash: persistent TCP connection to 192.168.1.20:5044.
+# =============================================================================
+
+filebeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    reload.enabled: false
+
+# ----------------------------------------------------------------------------
+# Docker autodiscover — pick up any container with label honeypot=true
+# ----------------------------------------------------------------------------
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      templates:
+        - condition:
+            contains:
+              docker.container.labels.honeypot: "true"
+          config:
+            - type: container
+              paths:
+                - "/var/lib/docker/containers/${data.docker.container.id}/*-json.log"
+              processors:
+                - add_fields:
+                    target: ""
+                    fields:
+                      source_host: "computer-1-honeypot"
+                      honeypot_role: "emulated_iot"
+                - decode_json_fields:
+                    fields: ["message"]
+                    process_array: false
+                    max_depth: 2
+                    target: "honeypot"
+                    overwrite_keys: true
+                - add_fields:
+                    target: "honeypot"
+                    fields:
+                      container_service: "${data.docker.container.labels.service}"
+                      container_name: "${data.docker.container.labels.container_name}"
+
+# ----------------------------------------------------------------------------
+# Optional: tail the host's /var/log/honeypot app.log fallback
+# ----------------------------------------------------------------------------
+filebeat.inputs:
+  - type: file
+    id: honeypot-app-log
+    enabled: true
+    paths:
+      - /var/log/honeypot/*.log
+    fields:
+      source_host: "computer-1-honeypot"
+      log_type: "host_app"
+    fields_under_root: true
+    json.keys_under_root: true
+    json.add_error_key: true
+
+# ----------------------------------------------------------------------------
+# Processors — normalize common fields before sending to Logstash
+# ----------------------------------------------------------------------------
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_docker_metadata: ~
+  - add_fields:
+      target: ""
+      fields:
+        lab_id: "ai-honeypot-ids"
+        shipper: "filebeat-computer-1"
+  - timestamp:
+      field: "@timestamp"
+      layouts:
+        - UNIX
+        - UNIX_MS
+      test:
+        - "2024-05-01T12:00:00.000Z"
+
+# ----------------------------------------------------------------------------
+# Output — send to Logstash on Computer 2 (port 5044 / Beats/Lumberjack)
+# ----------------------------------------------------------------------------
+output.logstash:
+  hosts: ["${LOGSTASH_HOST}:${LOGSTASH_PORT}"]
+  bulk_max_size: 2048
+  worker: 2
+  loadbalance: true
+  ttl: 30s
+  # TLS is disabled because the lab is air-gapped. Enable for production.
+  ssl.enabled: false
+
+# ----------------------------------------------------------------------------
+# Internal logging for Filebeat itself (also useful for troubleshooting)
+# ----------------------------------------------------------------------------
+logging.level: ${LOG_LEVEL:INFO}
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat.log
+  keepfiles: 7
+  permissions: 0644
+
+# ----------------------------------------------------------------------------
+# Monitoring — disabled (no Kibana-side MB needed for this lab)
+# ----------------------------------------------------------------------------
+monitoring.enabled: false
+
+# ----------------------------------------------------------------------------
+# Registry — track which log lines have been shipped
+# ----------------------------------------------------------------------------
+path.data: /usr/share/filebeat/data
+path.logs: /var/log/filebeat
+
+# ----------------------------------------------------------------------------
+# Queue — in-memory spool for resilience against brief Logstash outages
+# ----------------------------------------------------------------------------
+queue.mem:
+  events: 4096
+  flush.min_events: 1024
+  flush.timeout: 1s

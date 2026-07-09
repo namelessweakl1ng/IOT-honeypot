@@ -1,0 +1,375 @@
+# =============================================================================
+# Computer 1 — Honeypot Server — docker-compose.yml
+# =============================================================================
+# This compose file brings up 11 intentionally vulnerable Docker containers
+# that emulate IoT devices and common network services, plus a Filebeat sidecar
+# that ships every log line to the central Logstash on Computer 2.
+#
+# ⚠️  EDUCATIONAL USE ONLY — air-gapped lab network 192.168.1.0/24.
+#     Do NOT expose these ports to the public Internet.
+#
+# IP plan:
+#   Computer 1 host:      192.168.1.10
+#   Computer 2 (Logstash):192.168.1.20:5044
+#   Computer 3 (attacker):192.168.1.30
+#
+# Each container is on the "honeypot_net" bridge (172.20.0.0/16) and publishes
+# its service port to the host so the attacker (Comp 3) can reach it.
+# =============================================================================
+
+# ----- Shared environment (overridable via .env) ----------------------------
+x-common-env: &common-env
+  TZ: ${TZ:-UTC}
+  HONEYPOT_HOST_IP: ${HONEYPOT_HOST_IP:-192.168.1.10}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+# ----- Shared logging driver — captures container stdout as JSON ------------
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "service,container_name"
+
+# ----- Shared healthcheck defaults ------------------------------------------
+x-healthcheck: &hc-defaults
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 15s
+
+services:
+  # ===========================================================================
+  # 1. CCTV Camera — fake web panel on :8081
+  # ===========================================================================
+  camera:
+    build: ./containers/camera
+    container_name: hp-camera
+    hostname: cctv-cam-01
+    labels:
+      service: "camera"
+      container_name: "hp-camera"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEVICE_MODEL: "IP-CAM-1080P"
+      DEFAULT_USER: "admin"
+      DEFAULT_PASS: "admin"
+    ports:
+      - "8081:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.11
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 2. Smart Microwave — REST API on :8082
+  # ===========================================================================
+  microwave:
+    build: ./containers/microwave
+    container_name: hp-microwave
+    hostname: smart-mw-01
+    labels:
+      service: "microwave"
+      container_name: "hp-microwave"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEVICE_MODEL: "MW-X200"
+    ports:
+      - "8082:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.12
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/status',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 3. Smart TV — control panel on :8083
+  # ===========================================================================
+  smarttv:
+    build: ./containers/smarttv
+    container_name: hp-smarttv
+    hostname: smart-tv-01
+    labels:
+      service: "smarttv"
+      container_name: "hp-smarttv"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEVICE_MODEL: "TV-OLED-55"
+    ports:
+      - "8083:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.13
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 4. Smart Light — HTTP/MQTT-style API on :8084
+  # ===========================================================================
+  smartlight:
+    build: ./containers/smartlight
+    container_name: hp-smartlight
+    hostname: smart-bulb-01
+    labels:
+      service: "smartlight"
+      container_name: "hp-smartlight"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEVICE_MODEL: "BULB-RGBW"
+    ports:
+      - "8084:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.14
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/state',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 5. Router Login Panel — on :8085
+  # ===========================================================================
+  router:
+    build: ./containers/router
+    container_name: hp-router
+    hostname: router-gw
+    labels:
+      service: "router"
+      container_name: "hp-router"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEFAULT_USER: "admin"
+      DEFAULT_PASS: "password"
+    ports:
+      - "8085:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.15
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 6. NAS Storage — web UI on :8086
+  # ===========================================================================
+  nas:
+    build: ./containers/nas
+    container_name: hp-nas
+    hostname: nas-storage-01
+    labels:
+      service: "nas"
+      container_name: "hp-nas"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEFAULT_USER: "admin"
+      DEFAULT_PASS: "admin123"
+    ports:
+      - "8086:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.16
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 7. Printer — web UI :8087 + raw jetdirect :9100
+  # ===========================================================================
+  printer:
+    build: ./containers/printer
+    container_name: hp-printer
+    hostname: printer-hp-01
+    labels:
+      service: "printer"
+      container_name: "hp-printer"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      DEFAULT_USER: "admin"
+      DEFAULT_PASS: "admin"
+    ports:
+      - "8087:5000"   # web UI
+      - "9100:9100"   # raw jetdirect (PJL)
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.17
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 8. SSH honeypot — :2222 (weak creds, cowrie-style minimal)
+  # ===========================================================================
+  ssh:
+    build: ./containers/ssh
+    container_name: hp-ssh
+    hostname: ssh-server
+    labels:
+      service: "ssh"
+      container_name: "hp-ssh"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      SSH_PORT: "2222"
+    ports:
+      - "2222:2222"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.18
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect(('localhost',2222));print(s.recv(32));s.close()"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 9. FTP honeypot — :2121 (weak creds)
+  # ===========================================================================
+  ftp:
+    build: ./containers/ftp
+    container_name: hp-ftp
+    hostname: ftp-server
+    labels:
+      service: "ftp"
+      container_name: "hp-ftp"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      FTP_PORT: "2121"
+    ports:
+      - "2121:2121"
+      - "30000-30010:30000-30010"  # passive mode range
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.19
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect(('localhost',2121));print(s.recv(64));s.close()"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 10. HTTP — vulnerable web app (SQLi + cmd injection) on :8080
+  # ===========================================================================
+  http:
+    build: ./containers/http
+    container_name: hp-http
+    hostname: webapp-01
+    labels:
+      service: "http"
+      container_name: "hp-http"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+    ports:
+      - "8080:5000"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.20
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:5000/',timeout=3)"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # 11. Telnet honeypot — :2323 (weak creds)
+  # ===========================================================================
+  telnet:
+    build: ./containers/telnet
+    container_name: hp-telnet
+    hostname: iot-telnet-01
+    labels:
+      service: "telnet"
+      container_name: "hp-telnet"
+      honeypot: "true"
+    environment:
+      <<: *common-env
+      TELNET_PORT: "2323"
+    ports:
+      - "2323:2323"
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.21
+    logging: *default-logging
+    healthcheck:
+      <<: *hc-defaults
+      test: ["CMD", "python", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect(('localhost',2323));print(s.recv(64));s.close()"]
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Filebeat sidecar — ships all container logs to Logstash on Computer 2
+  # ===========================================================================
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.4
+    container_name: hp-filebeat
+    hostname: filebeat
+    user: root   # required to read /var/lib/docker/containers
+    volumes:
+      - ./configs/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./configs/filebeat-logging.conf:/etc/filebeat/logging.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    environment:
+      <<: *common-env
+      LOGSTASH_HOST: ${LOGSTASH_HOST:-192.168.1.20}
+      LOGSTASH_PORT: ${LOGSTASH_PORT:-5044}
+    command: filebeat -e -strict.perms=false
+    networks:
+      honeypot_net:
+        ipv4_address: 172.20.0.99
+    depends_on:
+      - camera
+      - microwave
+      - smarttv
+      - smartlight
+      - router
+      - nas
+      - printer
+      - ssh
+      - ftp
+      - http
+      - telnet
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  honeypot_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+# No top-level volumes: every container is intentionally ephemeral so that
+# restarts reset the honeypot state (a real attacker cannot persist a backdoor).

@@ -1,0 +1,138 @@
+# =============================================================================
+# Computer 2 — ELK Stack — docker-compose-elk.yml
+# =============================================================================
+# Brings up:
+#   - Elasticsearch 8.13 (single-node, security disabled for lab)
+#   - Logstash 8.13 (beats input on :5044, elasticsearch output)
+#   - Kibana 8.13 (web UI on :5601)
+#
+# Receives logs from Computer 1's Filebeat over TCP 5044.
+# Exposes Kibana on http://192.168.1.20:5601 for the operator.
+#
+# ⚠️ Security is intentionally disabled (xpack.security.enabled=false) because
+# this is an air-gapped lab. NEVER deploy this config to production.
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Elasticsearch — storage + search
+  # ===========================================================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elk-elasticsearch
+    hostname: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - cluster.name=honeypot-cluster
+      - node.name=honeypot-node-1
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./elasticsearch/index-template-honeypot.json:/usr/share/elasticsearch/config/index-template-honeypot.json:ro
+    ports:
+      - "9200:9200"   # REST API (used by ML ingest script)
+    networks:
+      - elk_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Logstash — receives from Filebeat, parses, enriches, indexes
+  # ===========================================================================
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    container_name: elk-logstash
+    hostname: logstash
+    volumes:
+      - ./logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
+      - ./logstash/conf.d:/etc/logstash/conf.d:ro
+      - ./logstash/patterns:/etc/logstash/patterns:ro
+    ports:
+      - "5044:5044"   # Beats / Lumberjack v2 input (from Computer 1 Filebeat)
+      - "9600:9600"   # Logstash monitoring API
+    environment:
+      - LS_JAVA_OPTS=-Xms512m -Xmx512m
+    networks:
+      - elk_net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9600/_node/stats || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Kibana — dashboards
+  # ===========================================================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: elk-kibana
+    hostname: kibana
+    volumes:
+      - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - ../dashboards:/usr/share/kibana/dashboards:ro
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - elk_net
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5601/api/status || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  # ===========================================================================
+  # Setup container — one-shot: loads index template + sample dashboards
+  # ===========================================================================
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elk-setup
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    volumes:
+      - ./elasticsearch/index-template-honeypot.json:/template.json:ro
+      - ../dashboards:/dashboards:ro
+    entrypoint: >
+      bash -c '
+        echo "[setup] loading index template...";
+        curl -fsS -X PUT "http://elasticsearch:9200/_index_template/honeypot-logs" -H "Content-Type: application/json" --data-binary @/template.json;
+        echo "";
+        echo "[setup] index template loaded. Done.";
+      '
+    networks:
+      - elk_net
+    restart: "no"
+
+networks:
+  elk_net:
+    driver: bridge
+
+volumes:
+  esdata:
+    driver: local

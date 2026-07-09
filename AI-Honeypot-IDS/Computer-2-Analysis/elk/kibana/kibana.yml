@@ -1,0 +1,21 @@
+# Kibana configuration — Computer 2 (air-gapped lab)
+server.host: 0.0.0.0
+server.port: 5601
+
+# No SSL in the lab
+server.ssl.enabled: false
+
+# Point at our Elasticsearch
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.username: ""
+elasticsearch.password: ""
+
+# Default index pattern for the honeypot logs
+kibana.defaultAppId: "dashboards"
+
+# Disable telemetry for the lab
+telemetry.enabled: false
+newsfeed.enabled: false
+
+# Allow importing saved objects via the UI
+savedObjects.importExportWorkspaces: ["default"]

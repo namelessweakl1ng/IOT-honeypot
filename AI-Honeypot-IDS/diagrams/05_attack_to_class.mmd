@@ -1,0 +1,12 @@
+%% Attack scripts → attack_class mapping (Mermaid)
+flowchart LR
+    S1[01_portscan<br/>nmap/masscan] --> recon
+    S2[02_bruteforce<br/>hydra] --> bruteforce
+    S3[03_webattacks<br/>curl] --> sqli & cmdi & xss & traversal & ssrf & implant
+    S4[04_dirscan<br/>gobuster/dirb] --> recon
+    S5[05_nikto<br/>nikto] --> recon
+    S6[06_sqlmap<br/>sqlmap] --> sqli
+    S7[07_netcat<br/>nc + PJL] --> recon & abuse & cmdi
+    S8[08_dos_sim<br/>curl burst] --> benign-cluster
+    S9[09_custom_payloads<br/>curated] --> sqli & cmdi & xss & traversal & ssrf
+    S10[10_credential_post<br/>post-auth] --> exfil & implant

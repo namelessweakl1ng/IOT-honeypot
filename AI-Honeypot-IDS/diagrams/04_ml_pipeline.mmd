@@ -1,0 +1,29 @@
+%% ML training pipeline (Mermaid)
+flowchart TB
+    RAW[data/raw.parquet<br/>pulled from ES by 01_ingest.py]
+    RAW --> FE[02_features.py<br/>feature engineering]
+    FE -->|numeric features| NUM[20 numeric cols<br/>lengths, ratios, signature flags, time]
+    FE -->|categorical features| CAT[4 cat cols<br/>service, protocol, method, country]
+    FE -->|scale| SCALER[StandardScaler<br/>saved as scaler.joblib]
+    FE -->|one-hot| OHE[pd.get_dummies<br/>column list saved as feature_columns.json]
+    NUM --> COMB[features.parquet]
+    CAT --> OHE
+    OHE --> COMB
+    SCALER --> COMB
+    COMB --> SPLIT[Stratified 80/20 split]
+    SPLIT -->|train| CV[5-fold stratified CV]
+    SPLIT -->|test| HOLD[test set held out]
+    CV --> MODELS{6 models}
+    MODELS --> M1[LogisticRegression]
+    MODELS --> M2[DecisionTree]
+    MODELS --> M3[RandomForest]
+    MODELS --> M4[SVC rbf]
+    MODELS --> M5[XGBoost]
+    MODELS --> M6[LightGBM]
+    M1 & M2 & M3 & M4 & M5 & M6 -->|refit on train| REFIT[trained model]
+    REFIT -->|predict test| EVAL[04_evaluate.py]
+    HOLD --> EVAL
+    EVAL --> CM[confusion_matrix_*.png]
+    EVAL --> ROC[roc_curve_*.png per best]
+    EVAL --> SUM[summary.json + model_comparison.csv]
+    EVAL -->|best by F1 macro| TM[trained_models/<br/>best_model_*.joblib<br/>+ scaler + feature_columns + labels]

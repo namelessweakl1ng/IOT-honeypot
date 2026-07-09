@@ -1,0 +1,53 @@
+AI-Honeypot-IDS — Network Topology (ASCII)
+==========================================
+
+                        ┌──────────────────────────────────┐
+                        │       Home Lab Router             │
+                        │       192.168.1.1                 │
+                        │   (DHCP disabled for lab IPs)     │
+                        │   WAN port UNPLUGGED (air-gap)    │
+                        └─────────────────┬─────────────────┘
+                                          │
+              ┌───────────────────────────┼───────────────────────────┐
+              │                           │                           │
+              │ Ethernet                  │ Ethernet                  │ Ethernet
+              │                           │                           │
+       ┌──────▼─────────┐         ┌───────▼─────────┐         ┌────────▼─────────┐
+       │  COMPUTER 1    │         │   COMPUTER 2    │         │   COMPUTER 3     │
+       │  Honeypot      │         │   SIEM + ML     │         │   Attacker       │
+       │  192.168.1.10  │         │   192.168.1.20  │         │   192.168.1.30   │
+       │                │         │                 │         │                  │
+       │ Ubuntu 22.04   │         │ Ubuntu 22.04    │         │ Kali Linux 2024  │
+       │ Docker Engine  │         │ Docker Engine   │         │ nmap/hydra/nikto │
+       │ 11 containers  │         │ Elasticsearch   │         │ sqlmap/gobuster  │
+       │ Filebeat       │         │ Logstash  :5044 │         │ netcat/curl      │
+       │   ─────────►   │         │ Kibana    :5601 │         │                  │
+       │   JSON logs    │         │  ◄──────────    │         │   ──────►        │
+       │   TCP :5044    │         │  receives logs  │         │   attacks        │
+       │                │         │  ML pipeline    │         │                  │
+       │ Ports:         │         │ Python 3.11     │         │                  │
+       │  8080-8087 web │         │ scikit-learn    │         │                  │
+       │  9100  printer │         │ XGBoost/LightGBM│         │                  │
+       │  2222  ssh     │         │                 │         │                  │
+       │  2121  ftp     │         │                 │         │                  │
+       │  2323  telnet  │         │                 │         │                  │
+       └────────────────┘         └─────────────────┘         └──────────────────┘
+              ▲                                                        │
+              │                                                        │
+              └────────────── attacks hit containers ──────────────────┘
+
+
+Docker bridge network on Computer 1:
+  honeypot_net  172.20.0.0/16  gateway 172.20.0.1
+    camera      172.20.0.11   :5000  → host 8081
+    microwave   172.20.0.12   :5000  → host 8082
+    smarttv     172.20.0.13   :5000  → host 8083
+    smartlight  172.20.0.14   :5000  → host 8084
+    router      172.20.0.15   :5000  → host 8085
+    nas         172.20.0.16   :5000  → host 8086
+    printer     172.20.0.17   :5000+9100 → host 8087+9100
+    ssh         172.20.0.18   :2222  → host 2222
+    ftp         172.20.0.19   :2121  → host 2121
+    http        172.20.0.20   :5000  → host 8080
+    telnet      172.20.0.21   :2323  → host 2323
+    filebeat    172.20.0.99   (sidecar, ships logs to 192.168.1.20:5044)

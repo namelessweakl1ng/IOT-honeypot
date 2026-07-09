@@ -1,0 +1,12 @@
+# Logstash configuration — Computer 2 (air-gapped lab)
+http.host: 0.0.0.0
+http.port: 9600
+
+# Single pipeline declared in pipelines.yml
+path.config: /etc/logstash/conf.d
+
+# Disable xpack monitoring (lab)
+xpack.monitoring.enabled: false
+
+# Slow log threshold (useful when debugging parsing)
+log.level: info

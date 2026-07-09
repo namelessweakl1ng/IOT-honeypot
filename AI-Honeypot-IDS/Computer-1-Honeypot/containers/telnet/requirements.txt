@@ -1,0 +1,2 @@
+# Telnet honeypot has no external python deps - pure stdlib.
+# Keep this file empty-but-present so the Dockerfile COPY step works.
