@@ -32,7 +32,7 @@ One JSON line per request with fields:
 protocol, method, path, query, username, password, payload, user_agent,
 attack_type_hint, response_code`.
 
-## Viva questions (sample)
+## Common Questions (sample)
 - Q: Why is `shell=True` dangerous here?
   A: It invokes a shell, so user input is interpreted as shell syntax, enabling
   `;`, `|`, `$()` command chaining — exactly the cmd-injection class.
